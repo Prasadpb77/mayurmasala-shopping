@@ -1,3 +1,6 @@
+"use client";
+
+import { useEffect, useState } from "react";
 import { Review } from "@/lib/types";
 
 const GOOGLE_MAPS_URL =
@@ -18,7 +21,26 @@ function Stars({ rating }: { rating: number }) {
 }
 
 export default function GoogleReviews({ reviews }: { reviews: Review[] }) {
+  const [currentIndex, setCurrentIndex] = useState(0);
+  const [paused, setPaused] = useState(false);
+
+  useEffect(() => {
+    if (reviews.length <= 1) return;
+
+    const interval = setInterval(() => {
+      if (!paused) {
+        setCurrentIndex((prev) => (prev + 1) % reviews.length);
+      }
+    }, 4000);
+
+    return () => clearInterval(interval);
+  }, [reviews.length, paused]);
+
   if (reviews.length === 0) return null;
+
+  const goTo = (index: number) => {
+    setCurrentIndex(((index % reviews.length) + reviews.length) % reviews.length);
+  };
 
   return (
     <section className="max-w-6xl mx-auto px-4 sm:px-6 py-16">
@@ -49,14 +71,29 @@ export default function GoogleReviews({ reviews }: { reviews: Review[] }) {
         </div>
       </div>
 
-      <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-5">
-        {reviews.map((review) => (
+      <div
+        className="relative flex items-center justify-center"
+        onMouseEnter={() => setPaused(true)}
+        onMouseLeave={() => setPaused(false)}
+      >
+        {/* Left arrow */}
+        <button
+          type="button"
+          onClick={() => goTo(currentIndex - 1)}
+          aria-label="Previous review"
+          className="absolute left-0 z-10 w-9 h-9 flex items-center justify-center rounded-full bg-tamarind-900/70 text-cream hover:bg-tamarind-900 transition-colors shadow-lg"
+        >
+          ◀
+        </button>
+
+        {/* Review card */}
+        <div className="w-full max-w-2xl mx-10">
           <div
-            key={review.id}
-            className="bg-white/70 border border-turmeric-300/30 rounded-2xl p-5 flex flex-col"
+            key={reviews[currentIndex].id}
+            className="bg-white/70 border border-turmeric-300/30 rounded-2xl p-6 sm:p-8 flex flex-col items-center text-center transition-opacity duration-500"
           >
-            <div className="flex items-center justify-between mb-2">
-              <Stars rating={review.rating} />
+            <div className="flex items-center justify-between w-full mb-3">
+              <Stars rating={reviews[currentIndex].rating} />
               <svg
                 aria-hidden
                 viewBox="0 0 24 24"
@@ -81,16 +118,52 @@ export default function GoogleReviews({ reviews }: { reviews: Review[] }) {
                 />
               </svg>
             </div>
-            <p className="text-sm text-tamarind-800/80 flex-1">&ldquo;{review.review_text}&rdquo;</p>
-            <div className="mt-4 flex items-center justify-between text-xs text-tamarind-800/50">
-              <span className="font-semibold text-tamarind-900">{review.author_name}</span>
-              {review.review_date && (
-                <span>{new Date(review.review_date).toLocaleDateString("en-IN", { month: "short", year: "numeric" })}</span>
+            <p className="text-base sm:text-lg text-tamarind-800/80 flex-1 leading-relaxed">
+              &ldquo;{reviews[currentIndex].review_text}&rdquo;
+            </p>
+            <div className="mt-5 flex items-center justify-between w-full text-xs text-tamarind-800/50">
+              <span className="font-semibold text-tamarind-900">
+                {reviews[currentIndex].author_name}
+              </span>
+              {reviews[currentIndex].review_date && (
+                <span>
+                  {new Date(reviews[currentIndex].review_date).toLocaleDateString("en-IN", {
+                    month: "short",
+                    year: "numeric",
+                  })}
+                </span>
               )}
             </div>
           </div>
-        ))}
+        </div>
+
+        {/* Right arrow */}
+        <button
+          type="button"
+          onClick={() => goTo(currentIndex + 1)}
+          aria-label="Next review"
+          className="absolute right-0 z-10 w-9 h-9 flex items-center justify-center rounded-full bg-tamarind-900/70 text-cream hover:bg-tamarind-900 transition-colors shadow-lg"
+        >
+          ▶
+        </button>
       </div>
+
+      {/* Dot indicators */}
+      {reviews.length > 1 && (
+        <div className="flex justify-center gap-2 mt-6">
+          {reviews.map((_, idx) => (
+            <button
+              key={idx}
+              type="button"
+              onClick={() => goTo(idx)}
+              aria-label={`Go to review ${idx + 1}`}
+              className={`w-2.5 h-2.5 rounded-full transition-colors ${
+                idx === currentIndex ? "bg-vermillion-500" : "bg-tamarind-900/30 hover:bg-tamarind-900/50"
+              }`}
+            />
+          ))}
+        </div>
+      )}
     </section>
   );
 }
