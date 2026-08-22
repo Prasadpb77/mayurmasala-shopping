@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import Image from "next/image";
 import { useCart } from "./CartContext";
 
 export default function Header() {
@@ -11,7 +12,13 @@ export default function Header() {
     <header className="sticky top-0 z-40 bg-tamarind-900/95 backdrop-blur text-cream border-b border-turmeric-500/30">
       <div className="max-w-6xl mx-auto px-4 sm:px-6 flex items-center justify-between h-16">
         <Link href="/" className="flex items-center gap-3 group">
-          <span className="text-2xl leading-none diya-flicker">🪔</span>
+          <Image
+            src="/logo.png"
+            alt="Mayur Masala and Pooja Center logo"
+            width={55}
+            height={44}
+            className="object-contain"
+          />
           <span className="font-display text-lg sm:text-xl tracking-wide group-hover:text-turmeric-300 transition-colors">
             {shopName}
           </span>
