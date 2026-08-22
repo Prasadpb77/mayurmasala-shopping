@@ -15,9 +15,28 @@ function supabase() {
 export async function POST(req: NextRequest) {
   try {
     const body = await req.json();
-    const { name, phone, address, items, honeypot } = body;
+    const {
+      name,
+      phone,
+      address_line1,
+      address_line2,
+      pincode,
+      city,
+      state,
+      items,
+      honeypot,
+    } = body;
 
-    const check = validateCheckout({ name, phone, address, honeypot });
+    const check = validateCheckout({
+      name,
+      phone,
+      address_line1,
+      address_line2,
+      pincode,
+      city,
+      state,
+      honeypot,
+    });
     if (!check.valid) {
       return NextResponse.json({ error: "validation_failed", details: check.errors }, { status: 400 });
     }
@@ -49,7 +68,11 @@ export async function POST(req: NextRequest) {
         customer_name: name.trim(),
         phone: normalizePhone(phone),
         is_whatsapp: true,
-        address: address.trim(),
+        address_line1: address_line1.trim(),
+        address_line2: address_line2?.trim() || null,
+        pincode: pincode.trim(),
+        city: city.trim(),
+        state: (state || "Maharashtra").trim(),
         items,
         total,
         status: "received",

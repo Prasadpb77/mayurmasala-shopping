@@ -1,4 +1,9 @@
-export type OrderStatus = "received" | "processing" | "out_for_delivery" | "delivered";
+export type OrderStatus =
+  | "received"
+  | "processing"
+  | "out_for_delivery"
+  | "delivered"
+  | "return_not_delivered";
 
 export interface Product {
   id: string;
@@ -33,7 +38,12 @@ export interface Order {
   customer_name: string;
   phone: string;
   is_whatsapp: boolean;
-  address: string;
+  address_line1: string;
+  address_line2: string | null;
+  pincode: string;
+  city: string;
+  state: string;
+  address: string | null; // legacy combined address, kept for old orders
   items: OrderItem[];
   total: number;
   status: OrderStatus;
@@ -44,11 +54,23 @@ export interface Order {
   updated_at: string;
 }
 
+export function formatOrderAddress(order: Order): string {
+  const parts = [
+    order.address_line1,
+    order.address_line2,
+    order.city && order.pincode ? `${order.city} - ${order.pincode}` : order.city || order.pincode,
+    order.state,
+  ].filter(Boolean);
+  if (parts.length > 0) return parts.join(", ");
+  return order.address || "";
+}
+
 export const STATUS_LABELS: Record<OrderStatus, string> = {
   received: "Order Received",
   processing: "Processing",
   out_for_delivery: "Out for Delivery",
   delivered: "Delivered",
+  return_not_delivered: "Return / Not Delivered",
 };
 
 export interface Review {
@@ -62,9 +84,20 @@ export interface Review {
   created_at?: string;
 }
 
+// Main forward-moving flow shown as the tracking timeline on the customer side.
 export const STATUS_ORDER: OrderStatus[] = [
   "received",
   "processing",
   "out_for_delivery",
   "delivered",
+];
+
+// All statuses selectable from the admin dashboard, including the
+// exception status for failed/returned deliveries.
+export const ADMIN_STATUS_OPTIONS: OrderStatus[] = [
+  "received",
+  "processing",
+  "out_for_delivery",
+  "delivered",
+  "return_not_delivered",
 ];

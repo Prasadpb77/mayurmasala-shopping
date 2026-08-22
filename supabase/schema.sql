@@ -10,7 +10,7 @@ create extension if not exists "uuid-ossp";
 do $$
 begin
   if not exists (select 1 from pg_type where typname = 'order_status') then
-    create type order_status as enum ('received', 'processing', 'out_for_delivery', 'delivered');
+    create type order_status as enum ('received', 'processing', 'out_for_delivery', 'delivered', 'return_not_delivered');
   end if;
 end $$;
 
@@ -34,7 +34,12 @@ create table if not exists orders (
   customer_name text not null,
   phone text not null,                        -- validated E.164-ish, digits only w/ optional +91
   is_whatsapp boolean not null default true,
-  address text not null,
+  address_line1 text not null,
+  address_line2 text,
+  pincode text not null,
+  city text not null,
+  state text not null default 'Maharashtra',
+  address text,                               -- legacy combined address (unused by new orders)
   items jsonb not null,                       -- [{product_id,name,price,qty}]
   total numeric(10,2) not null,
   status order_status not null default 'received',
@@ -160,6 +165,10 @@ drop policy if exists "authenticated manage orders" on orders;
 create policy "authenticated manage orders" on orders
   for update using (auth.role() = 'authenticated')
   with check (auth.role() = 'authenticated');
+
+drop policy if exists "authenticated delete orders" on orders;
+create policy "authenticated delete orders" on orders
+  for delete using (auth.role() = 'authenticated');
 
 drop policy if exists "authenticated view all orders" on orders;
 -- (covered by "public read own order" select=true; dashboard uses authenticated session anyway)

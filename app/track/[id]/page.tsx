@@ -5,7 +5,7 @@ import { useParams, useSearchParams } from "next/navigation";
 import Header from "@/components/Header";
 import Footer from "@/components/Footer";
 import { createClient } from "@/lib/supabaseClient";
-import { Order, STATUS_LABELS, STATUS_ORDER } from "@/lib/types";
+import { Order, STATUS_LABELS, STATUS_ORDER, formatOrderAddress } from "@/lib/types";
 
 export default function TrackOrderPage() {
   const params = useParams();
@@ -73,36 +73,41 @@ export default function TrackOrderPage() {
               Placed on {new Date(order.created_at).toLocaleString("en-IN")}
             </p>
 
-            {/* Status timeline */}
-            <div className="flex items-center justify-between mb-10">
-              {STATUS_ORDER.map((status, idx) => {
-                const currentIdx = STATUS_ORDER.indexOf(order.status);
-                const reached = idx <= currentIdx;
-                return (
-                  <div key={status} className="flex-1 flex flex-col items-center relative">
-                    {idx > 0 && (
+            {order.status === "return_not_delivered" ? (
+              <div className="bg-vermillion-500/10 border border-vermillion-500/30 text-vermillion-500 rounded-xl px-4 py-3 mb-10 text-sm font-semibold">
+                ⚠ This order was returned / could not be delivered. Please contact the shop for details.
+              </div>
+            ) : (
+              <div className="flex items-center justify-between mb-10">
+                {STATUS_ORDER.map((status, idx) => {
+                  const currentIdx = STATUS_ORDER.indexOf(order.status);
+                  const reached = idx <= currentIdx;
+                  return (
+                    <div key={status} className="flex-1 flex flex-col items-center relative">
+                      {idx > 0 && (
+                        <div
+                          className={`absolute top-4 right-1/2 w-full h-0.5 ${
+                            reached ? "bg-vermillion-500" : "bg-tamarind-900/10"
+                          }`}
+                        />
+                      )}
                       <div
-                        className={`absolute top-4 right-1/2 w-full h-0.5 ${
-                          reached ? "bg-vermillion-500" : "bg-tamarind-900/10"
+                        className={`w-8 h-8 rounded-full flex items-center justify-center text-xs font-bold z-10 ${
+                          reached
+                            ? "bg-vermillion-500 text-cream"
+                            : "bg-tamarind-900/10 text-tamarind-900/40"
                         }`}
-                      />
-                    )}
-                    <div
-                      className={`w-8 h-8 rounded-full flex items-center justify-center text-xs font-bold z-10 ${
-                        reached
-                          ? "bg-vermillion-500 text-cream"
-                          : "bg-tamarind-900/10 text-tamarind-900/40"
-                      }`}
-                    >
-                      {idx + 1}
+                      >
+                        {idx + 1}
+                      </div>
+                      <span className="text-[11px] text-center mt-2 max-w-[70px] text-tamarind-900/70">
+                        {STATUS_LABELS[status]}
+                      </span>
                     </div>
-                    <span className="text-[11px] text-center mt-2 max-w-[70px] text-tamarind-900/70">
-                      {STATUS_LABELS[status]}
-                    </span>
-                  </div>
-                );
-              })}
-            </div>
+                  );
+                })}
+              </div>
+            )}
 
             <div className="bg-white/60 border border-turmeric-300/30 rounded-2xl p-5 space-y-4">
               <div>
@@ -137,7 +142,7 @@ export default function TrackOrderPage() {
 
               <div className="text-sm text-tamarind-800/70">
                 <p className="font-semibold text-tamarind-900 mb-1">Delivery Address</p>
-                <p>{order.address}</p>
+                <p>{formatOrderAddress(order)}</p>
               </div>
             </div>
           </div>

@@ -40,19 +40,41 @@ export function isValidAddress(address: string): boolean {
   return true;
 }
 
+export function isValidAddressLine1(line: string): boolean {
+  const trimmed = line.trim();
+  if (trimmed.length < 5 || trimmed.length > 150) return false;
+  if (/https?:\/\//i.test(trimmed)) return false;
+  return true;
+}
+
+export function isValidPincode(pincode: string): boolean {
+  return /^\d{6}$/.test(pincode.trim());
+}
+
+export function isValidCity(city: string): boolean {
+  const trimmed = city.trim();
+  return trimmed.length >= 2 && trimmed.length <= 60;
+}
+
 export interface CheckoutValidationResult {
   valid: boolean;
   errors: {
     name?: string;
     phone?: string;
-    address?: string;
+    address_line1?: string;
+    pincode?: string;
+    city?: string;
   };
 }
 
 export function validateCheckout(input: {
   name: string;
   phone: string;
-  address: string;
+  address_line1: string;
+  address_line2?: string;
+  pincode: string;
+  city: string;
+  state?: string;
   honeypot?: string;
 }): CheckoutValidationResult {
   const errors: CheckoutValidationResult["errors"] = {};
@@ -68,8 +90,14 @@ export function validateCheckout(input: {
   if (!isValidIndianPhone(input.phone)) {
     errors.phone = "Enter a valid 10-digit Indian mobile number.";
   }
-  if (!isValidAddress(input.address)) {
-    errors.address = "Enter a complete delivery address (at least 10 characters, no links).";
+  if (!isValidAddressLine1(input.address_line1)) {
+    errors.address_line1 = "Enter your flat/house no. and street (at least 5 characters, no links).";
+  }
+  if (!isValidPincode(input.pincode)) {
+    errors.pincode = "Enter a valid 6-digit PIN code.";
+  }
+  if (!isValidCity(input.city)) {
+    errors.city = "Enter a valid city name.";
   }
 
   return { valid: Object.keys(errors).length === 0, errors };

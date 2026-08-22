@@ -154,6 +154,55 @@ If you'd rather not manually copy reviews, run the migration in
 the section simply won't render, and the two Google buttons can be added
 directly in the About section instead if you prefer.
 
+**Structured delivery address + PIN code auto-fill**
+Checkout now collects Address Line 1, Address Line 2 (optional), PIN code,
+City, and State separately instead of one free-text box. Typing a 6-digit PIN
+code automatically looks up the city via India Post's free public API
+(`api.postalpincode.in`, no key needed) and fills in City + State — State
+defaults to "Maharashtra" and both remain editable if the lookup is wrong or
+the PIN isn't found. If you already ran the original schema, run
+`supabase/migrations/004_structured_address.sql` once to add the new columns
+(old orders keep displaying fine via their original combined address).
+
+**Product image zoom / lightbox**
+Clicking any product photo (on the homepage) opens a full-size zoomed popup
+— tap the backdrop or the × to close. A small 🔍 icon appears on hover as a
+visual cue. Built with `components/LightboxContext.tsx`, wired in globally via
+the root layout so it's available anywhere product images are shown.
+
+**Bill generation & thermal printing**
+From `/admin` on any order:
+- **"Generate Bill"** — creates a receipt-style PDF sized for 58mm ("2 inch")
+  thermal printer rolls, uploads it automatically to the `bills` Supabase
+  Storage bucket, and saves the link on the order — no manual file needed.
+  That link then automatically shows up on the customer's **tracking page**
+  and gets included in the **WhatsApp status update** message, since both
+  already read from `order.bill_url`.
+- **"Print Bill"** — opens a print-ready receipt in a new window sized to
+  58mm width and triggers the browser's print dialog immediately; works with
+  any thermal printer set up as a normal system printer (most POS thermal
+  printers via their Windows/Android driver support this).
+- **"Upload Custom Bill (PDF)"** — the original manual upload is still there
+  in case you ever want to attach a different PDF (e.g. from separate billing
+  software) instead of the auto-generated one.
+
+**Order management safeguards**
+- **Delete Order** — every order card in `/admin` has a "Delete Order" button
+  that asks "Are you sure?" with the order number and customer name before
+  removing it permanently. Requires the new delete RLS policy — run
+  `supabase/migrations/005_return_status_and_delete.sql` once if your project
+  already existed.
+- **Confirmation when reverting a delivered order** — if an order is already
+  "Delivered" and you change its status back to anything else, a confirm
+  dialog appears first ("...are you sure you want to move it back to...")
+  to prevent accidental clicks from undoing a completed delivery.
+- **New status: Return / Not Delivered** — for orders that come back or
+  couldn't be delivered. Selectable from the same status dropdown as any
+  other stage. It's an exception state, so it's excluded from the customer's
+  normal 4-step tracking timeline — instead, the tracking page shows a clear
+  "this order was returned / could not be delivered, please contact the shop"
+  banner. The same migration file above adds this status to the database.
+
 **1992 heritage story**
 Default "Our Story" copy in the schema (`site_settings.about`) is written
 around the shop being Pimpri's oldest and most trusted masala & pooja store

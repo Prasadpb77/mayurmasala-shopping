@@ -4,10 +4,12 @@ import { useEffect, useState, useRef } from "react";
 import AdminGuard from "@/components/AdminGuard";
 import AdminNav from "@/components/AdminNav";
 import { createClient } from "@/lib/supabaseClient";
-import { Order, OrderStatus, STATUS_LABELS, STATUS_ORDER } from "@/lib/types";
+import { Order, OrderStatus, STATUS_LABELS, ADMIN_STATUS_OPTIONS, formatOrderAddress } from "@/lib/types";
 import { buildStatusUpdateWhatsappLink } from "@/lib/whatsapp";
+import { generateBillPdfBlob } from "@/lib/billPdf";
+import { openThermalPrintWindow } from "@/lib/printBill";
 
-const FILTERS: ("all" | OrderStatus)[] = ["all", ...STATUS_ORDER];
+const FILTERS: ("all" | OrderStatus)[] = ["all", ...ADMIN_STATUS_OPTIONS];
 
 function OrdersDashboard() {
   const [orders, setOrders] = useState<Order[]>([]);
@@ -44,8 +46,28 @@ function OrdersDashboard() {
   }, []);
 
   async function updateStatus(order: Order, status: OrderStatus) {
+    if (order.status === "delivered" && status !== "delivered") {
+      const confirmed = confirm(
+        `This order is already marked "Delivered". Are you sure you want to move it back to "${STATUS_LABELS[status]}"?`
+      );
+      if (!confirmed) return;
+    }
     const supabase = createClient();
     await supabase.from("orders").update({ status }).eq("id", order.id);
+    loadOrders();
+  }
+
+  async function deleteOrder(order: Order) {
+    const confirmed = confirm(
+      `Are you sure you want to delete order ${order.order_number} (${order.customer_name})? This cannot be undone.`
+    );
+    if (!confirmed) return;
+    const supabase = createClient();
+    const { error } = await supabase.from("orders").delete().eq("id", order.id);
+    if (error) {
+      alert("Delete failed: " + error.message);
+      return;
+    }
     loadOrders();
   }
 
@@ -55,6 +77,37 @@ function OrdersDashboard() {
       .from("orders")
       .update({ payment_received: !order.payment_received })
       .eq("id", order.id);
+    loadOrders();
+  }
+
+  async function generateAndUploadBill(order: Order) {
+    setUploadingFor(order.id);
+    try {
+      const blob = generateBillPdfBlob(order);
+      const supabase = createClient();
+      const path = `${order.id}/${Date.now()}-bill.pdf`;
+
+      const { error: uploadError } = await supabase.storage
+        .from("bills")
+        .upload(path, blob, { contentType: "application/pdf", upsert: true });
+
+      if (uploadError) {
+        alert("Bill generation failed: " + uploadError.message);
+        setUploadingFor(null);
+        return;
+      }
+
+      const { data: publicUrlData } = supabase.storage.from("bills").getPublicUrl(path);
+
+      await supabase
+        .from("orders")
+        .update({ bill_url: publicUrlData.publicUrl })
+        .eq("id", order.id);
+    } catch (e) {
+      console.error(e);
+      alert("Something went wrong generating the bill.");
+    }
+    setUploadingFor(null);
     loadOrders();
   }
 
@@ -150,7 +203,7 @@ function OrdersDashboard() {
                     <p className="text-xs text-tamarind-800/60">
                       {order.phone} · {new Date(order.created_at).toLocaleString("en-IN")}
                     </p>
-                    <p className="text-xs text-tamarind-800/60 mt-1 max-w-md">{order.address}</p>
+                    <p className="text-xs text-tamarind-800/60 mt-1 max-w-md">{formatOrderAddress(order)}</p>
                   </div>
                   <div className="text-right">
                     <p className="font-display text-lg text-vermillion-500">
@@ -186,12 +239,27 @@ function OrdersDashboard() {
                     onChange={(e) => updateStatus(order, e.target.value as OrderStatus)}
                     className="text-sm border border-tamarind-900/20 rounded-lg px-3 py-2 bg-white"
                   >
-                    {STATUS_ORDER.map((s) => (
+                    {ADMIN_STATUS_OPTIONS.map((s) => (
                       <option key={s} value={s}>
                         {STATUS_LABELS[s]}
                       </option>
                     ))}
                   </select>
+
+                  <button
+                    onClick={() => generateAndUploadBill(order)}
+                    disabled={uploadingFor === order.id}
+                    className="text-xs font-semibold bg-tamarind-900 hover:bg-tamarind-800 text-cream px-3 py-2 rounded-full transition-colors disabled:opacity-50"
+                  >
+                    {uploadingFor === order.id ? "Generating..." : "Generate Bill"}
+                  </button>
+
+                  <button
+                    onClick={() => openThermalPrintWindow(order)}
+                    className="text-xs font-semibold border border-tamarind-900/30 hover:border-vermillion-500 hover:text-vermillion-500 text-tamarind-900 px-3 py-2 rounded-full transition-colors"
+                  >
+                    Print Bill
+                  </button>
 
                   {order.status === "out_for_delivery" || order.bill_url ? (
                     <button
@@ -202,8 +270,8 @@ function OrdersDashboard() {
                       {uploadingFor === order.id
                         ? "Uploading..."
                         : order.bill_url
-                        ? "Replace Bill (PDF)"
-                        : "Upload Bill (PDF)"}
+                        ? "Replace with Custom PDF"
+                        : "Upload Custom Bill (PDF)"}
                     </button>
                   ) : null}
 
@@ -226,6 +294,13 @@ function OrdersDashboard() {
                   >
                     Send WhatsApp Update
                   </a>
+
+                  <button
+                    onClick={() => deleteOrder(order)}
+                    className="text-xs font-semibold bg-vermillion-600 hover:bg-vermillion-500 text-white px-3 py-2 rounded-full transition-colors"
+                  >
+                    Delete Order
+                  </button>
                 </div>
               </div>
             ))}
