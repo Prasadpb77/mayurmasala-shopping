@@ -3,17 +3,21 @@ import Banner from "@/components/Banner";
 import Footer from "@/components/Footer";
 import ProductCard from "@/components/ProductCard";
 import CartDrawer from "@/components/CartDrawer";
-import { getActiveProducts, getSiteSettings } from "@/lib/data";
+import GoogleReviews from "@/components/GoogleReviews";
+import InstagramReels from "@/components/InstagramReels";
+import { getActiveProducts, getSiteSettings, getFeaturedReviews } from "@/lib/data";
 
 export const revalidate = 30;
 
 export default async function HomePage() {
-  const [products, settings] = await Promise.all([
+  const [products, settings, reviews] = await Promise.all([
     getActiveProducts(),
     getSiteSettings(),
+    getFeaturedReviews(),
   ]);
 
   const shopName = process.env.NEXT_PUBLIC_SHOP_NAME || "Mayur Masala and Pooja Center";
+  const hasReels = settings.instagram_reels.urls.some((u) => u.trim());
 
   const categories = Array.from(
     new Set(products.map((p) => p.category || "General"))
@@ -27,8 +31,12 @@ export default async function HomePage() {
 
       {/* HERO */}
       <section className="relative overflow-hidden bg-diya-glow bg-tamarind-900 text-cream">
-        <div className="max-w-6xl mx-auto px-4 sm:px-6 py-20 sm:py-28 grid md:grid-cols-2 gap-10 items-center">
-          <div>
+        <div
+          className={`max-w-6xl mx-auto px-4 sm:px-6 py-20 sm:py-28 grid gap-10 items-center ${
+            hasReels ? "md:grid-cols-5" : "md:grid-cols-2"
+          }`}
+        >
+          <div className={hasReels ? "md:col-span-2" : ""}>
             <span className="inline-block text-xs font-semibold tracking-widest uppercase text-turmeric-300 border border-turmeric-300/40 rounded-full px-3 py-1 mb-5">
               Est. 1992 · Pimpri
             </span>
@@ -55,9 +63,16 @@ export default async function HomePage() {
               </a>
             </div>
           </div>
-          <div className="relative aspect-square rounded-3xl bg-gradient-to-br from-turmeric-500/20 to-vermillion-500/20 border border-turmeric-300/20 flex items-center justify-center text-8xl">
-            🪔🌶️
-          </div>
+
+          {hasReels ? (
+            <div className="md:col-span-3">
+              <InstagramReels urls={settings.instagram_reels.urls} />
+            </div>
+          ) : (
+            <div className="relative aspect-square rounded-3xl bg-gradient-to-br from-turmeric-500/20 to-vermillion-500/20 border border-turmeric-300/20 flex items-center justify-center text-8xl">
+              🪔🌶️
+            </div>
+          )}
         </div>
       </section>
 
@@ -100,6 +115,8 @@ export default async function HomePage() {
           </p>
         </div>
       </section>
+
+      <GoogleReviews reviews={reviews} />
 
       <Footer tagline={settings.footer.tagline} hours={settings.footer.hours} />
     </>

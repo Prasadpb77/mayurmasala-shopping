@@ -122,6 +122,38 @@ every 15s so status changes reflect without a manual refresh.
   `site_settings` table and reflected on the live site within ~30 seconds
   (the homepage revalidates every 30s).
 
+**Instagram Reels (hero section)**
+Manage from `/admin/settings` → paste up to 3 reel links (open the reel on
+Instagram → Share → Copy Link). These replace the hero graphic on the
+homepage using Instagram's **official embed script** (`instagram.com/embed.js`)
+— no scraping, so views/likes stay live and it's fully compliant. Leave all
+three blank to show the default diya/chili graphic instead. If you've already
+run the original schema, run `supabase/migrations/003_instagram_reels.sql`
+once to add this setting.
+
+**Google Reviews (5-star)**
+Google doesn't provide a free public feed of a business's reviews, and pulling
+them programmatically needs a paid Google Places API key — so this is built
+as a **curated testimonials section** instead: go to `/admin/reviews`, copy a
+5-star review's text and reviewer name from your actual Google Business
+listing, and paste it in. It appears on the homepage (above the footer) in a
+card with a Google "G" mark and star rating. Only reviews marked **5 stars**
+and **"Show on website"** appear publicly — you can hide or delete any time.
+Two buttons sit above the cards:
+- **"See All Reviews"** → links straight to your real Google Maps listing
+- **"Write a Review"** → links to Google's write-a-review page for your listing
+
+Both links come from `NEXT_PUBLIC_GOOGLE_MAPS_URL` and
+`NEXT_PUBLIC_GOOGLE_WRITE_REVIEW_URL` in your env vars (already pre-filled
+with your listing's details in `.env.example` — double check the "Write a
+Review" link opens the right listing once deployed, since it's built from the
+place's internal ID and Google occasionally changes this URL format).
+
+If you'd rather not manually copy reviews, run the migration in
+`supabase/migrations/002_reviews.sql` and just leave the reviews table empty —
+the section simply won't render, and the two Google buttons can be added
+directly in the About section instead if you prefer.
+
 **1992 heritage story**
 Default "Our Story" copy in the schema (`site_settings.about`) is written
 around the shop being Pimpri's oldest and most trusted masala & pooja store

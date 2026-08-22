@@ -58,7 +58,8 @@ create table if not exists site_settings (
 insert into site_settings (key, value) values
   ('banner', '{"enabled": true, "text": "Celebrating 30+ years in Pimpri — fresh masalas ground daily, all pooja samagri under one roof.", "link": ""}'),
   ('about', '{"title": "Our Story", "body": "Founded in 1992, Mayur Masala and Pooja Center has been Pimpri''s trusted home for pure, freshly ground masalas and complete pooja samagri for over three decades. What began as a small family counter has grown into the area''s most loved masala and pooja store, serving generations of families with the same care, purity and honesty we started with."}'),
-  ('footer', '{"tagline": "Trusted since 1992 — Pimpri''s own masala and pooja store.", "hours": "Open all days, 9:00 AM - 9:00 PM"}')
+  ('footer', '{"tagline": "Trusted since 1992 — Pimpri''s own masala and pooja store.", "hours": "Open all days, 9:00 AM - 9:00 PM"}'),
+  ('instagram_reels', '{"urls": ["", "", ""]}')
 on conflict (key) do nothing;
 
 -- 6. UPDATED_AT TRIGGER ------------------------------------------------
@@ -98,6 +99,31 @@ begin
   return result;
 end;
 $$ language plpgsql;
+
+-- 5b. REVIEWS (manually curated from Google, shown on homepage) ------------
+create table if not exists reviews (
+  id uuid primary key default uuid_generate_v4(),
+  author_name text not null,
+  rating int not null check (rating between 1 and 5),
+  review_text text not null,
+  review_date date,
+  featured boolean not null default true,   -- uncheck to hide without deleting
+  sort_order int not null default 0,
+  created_at timestamptz not null default now()
+);
+
+create index if not exists idx_reviews_featured on reviews(featured, sort_order);
+
+alter table reviews enable row level security;
+
+drop policy if exists "public read featured reviews" on reviews;
+create policy "public read featured reviews" on reviews
+  for select using (featured = true);
+
+drop policy if exists "authenticated manage reviews" on reviews;
+create policy "authenticated manage reviews" on reviews
+  for all using (auth.role() = 'authenticated')
+  with check (auth.role() = 'authenticated');
 
 -- ============================================================
 -- ROW LEVEL SECURITY

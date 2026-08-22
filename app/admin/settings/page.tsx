@@ -9,6 +9,7 @@ function SettingsAdmin() {
   const [banner, setBanner] = useState({ enabled: false, text: "", link: "" });
   const [about, setAbout] = useState({ title: "", body: "" });
   const [footer, setFooter] = useState({ tagline: "", hours: "" });
+  const [reels, setReels] = useState({ urls: ["", "", ""] });
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState<string | null>(null);
 
@@ -20,6 +21,7 @@ function SettingsAdmin() {
         if (row.key === "banner") setBanner(row.value);
         if (row.key === "about") setAbout(row.value);
         if (row.key === "footer") setFooter(row.value);
+        if (row.key === "instagram_reels") setReels(row.value);
       });
       setLoading(false);
     }
@@ -105,6 +107,38 @@ function SettingsAdmin() {
             className="bg-vermillion-500 hover:bg-vermillion-400 text-cream font-semibold px-5 py-2 rounded-full text-sm disabled:opacity-50"
           >
             {saving === "about" ? "Saving..." : "Save About Section"}
+          </button>
+        </section>
+
+        {/* INSTAGRAM REELS */}
+        <section className="bg-white/70 border border-turmeric-300/30 rounded-2xl p-5">
+          <h2 className="font-display text-xl text-tamarind-900 mb-1">Instagram Reels</h2>
+          <p className="text-xs text-tamarind-800/60 mb-4">
+            Paste up to 3 reel links (open the reel on Instagram → Share → Copy Link).
+            They&apos;ll replace the hero graphic on the homepage. Leave all blank to
+            show the default graphic instead.
+          </p>
+          <div className="space-y-3 mb-3">
+            {reels.urls.map((url, idx) => (
+              <input
+                key={idx}
+                value={url}
+                onChange={(e) => {
+                  const next = [...reels.urls];
+                  next[idx] = e.target.value;
+                  setReels({ urls: next });
+                }}
+                className="w-full border border-tamarind-900/20 rounded-xl px-3 py-2 bg-white text-sm"
+                placeholder={`Reel ${idx + 1} link — https://www.instagram.com/reel/...`}
+              />
+            ))}
+          </div>
+          <button
+            onClick={() => save("instagram_reels", reels)}
+            disabled={saving === "instagram_reels"}
+            className="bg-vermillion-500 hover:bg-vermillion-400 text-cream font-semibold px-5 py-2 rounded-full text-sm disabled:opacity-50"
+          >
+            {saving === "instagram_reels" ? "Saving..." : "Save Reels"}
           </button>
         </section>
 

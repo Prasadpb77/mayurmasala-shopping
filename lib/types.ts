@@ -51,6 +51,17 @@ export const STATUS_LABELS: Record<OrderStatus, string> = {
   delivered: "Delivered",
 };
 
+export interface Review {
+  id: string;
+  author_name: string;
+  rating: number;
+  review_text: string;
+  review_date: string | null;
+  featured: boolean;
+  sort_order: number;
+  created_at?: string;
+}
+
 export const STATUS_ORDER: OrderStatus[] = [
   "received",
   "processing",
