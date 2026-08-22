@@ -79,20 +79,26 @@ export default function InstagramReels({ urls }: { urls: string[] }) {
             className="transition-opacity duration-500"
             style={{ height: "85vh", transform: "scale(0.85)", transformOrigin: "top center" }}
           >
-            <blockquote
-              key={validUrls[currentIndex]}
-              className="instagram-media"
-              data-instgrm-permalink={validUrls[currentIndex]}
-              data-instgrm-version="14"
-              style={{
-                background: "#FFF",
-                border: 0,
-                borderRadius: "12px",
-                margin: 0,
-                minWidth: "auto",
-                width: "100%",
-              }}
-            />
+            {validUrls.slice(0, 3).map((url, idx) => (
+              <div
+                key={url + idx}
+                className={idx === currentIndex ? "block" : "hidden"}
+              >
+                <blockquote
+                  className="instagram-media"
+                  data-instgrm-permalink={url}
+                  data-instgrm-version="14"
+                  style={{
+                    background: "#FFF",
+                    border: 0,
+                    borderRadius: "12px",
+                    margin: 0,
+                    minWidth: "auto",
+                    width: "100%",
+                  }}
+                />
+              </div>
+            ))}
           </div>
         </div>
 
