@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 
 declare global {
   interface Window {
@@ -18,6 +18,7 @@ function normalizeReelUrl(url: string): string {
 
 export default function InstagramReels({ urls }: { urls: string[] }) {
   const containerRef = useRef<HTMLDivElement>(null);
+  const [currentIndex, setCurrentIndex] = useState(0);
   const validUrls = urls.map(normalizeReelUrl).filter(Boolean);
 
   useEffect(() => {
@@ -45,6 +46,11 @@ export default function InstagramReels({ urls }: { urls: string[] }) {
 
   if (validUrls.length === 0) return null;
 
+  const goTo = (index: number) => {
+    const total = validUrls.length;
+    setCurrentIndex(((index % total) + total) % total);
+  };
+
   return (
     <div ref={containerRef} className="w-full">
       <a
@@ -55,24 +61,68 @@ export default function InstagramReels({ urls }: { urls: string[] }) {
       >
         <span aria-hidden>📸</span> Follow @mayurmasalacenter
       </a>
-      <div className="grid grid-cols-1 gap-4">
-        {validUrls.slice(0, 3).map((url, idx) => (
-          <blockquote
-            key={url + idx}
-            className="instagram-media"
-            data-instgrm-permalink={url}
-            data-instgrm-version="14"
-            style={{
-              background: "#FFF",
-              border: 0,
-              borderRadius: "12px",
-              margin: 0,
-              minWidth: "auto",
-              width: "100%",
-            }}
-          />
-        ))}
+
+      <div className="relative flex items-center justify-center">
+        {/* Left arrow */}
+        <button
+          type="button"
+          onClick={() => goTo(currentIndex - 1)}
+          aria-label="Previous reel"
+          className="absolute left-0 z-10 w-9 h-9 flex items-center justify-center rounded-full bg-tamarind-900/70 text-cream hover:bg-tamarind-900 transition-colors shadow-lg"
+        >
+          ◀
+        </button>
+
+        {/* Reel container - 70% height */}
+        <div className="w-full max-w-md mx-10 overflow-hidden">
+          <div
+            className="transition-opacity duration-500"
+            style={{ height: "70vh", transform: "scale(0.7)", transformOrigin: "top center" }}
+          >
+            <blockquote
+              key={validUrls[currentIndex]}
+              className="instagram-media"
+              data-instgrm-permalink={validUrls[currentIndex]}
+              data-instgrm-version="14"
+              style={{
+                background: "#FFF",
+                border: 0,
+                borderRadius: "12px",
+                margin: 0,
+                minWidth: "auto",
+                width: "100%",
+              }}
+            />
+          </div>
+        </div>
+
+        {/* Right arrow */}
+        <button
+          type="button"
+          onClick={() => goTo(currentIndex + 1)}
+          aria-label="Next reel"
+          className="absolute right-0 z-10 w-9 h-9 flex items-center justify-center rounded-full bg-tamarind-900/70 text-cream hover:bg-tamarind-900 transition-colors shadow-lg"
+        >
+          ▶
+        </button>
       </div>
+
+      {/* Dot indicators */}
+      {validUrls.length > 1 && (
+        <div className="flex justify-center gap-2 mt-4">
+          {validUrls.map((_, idx) => (
+            <button
+              key={idx}
+              type="button"
+              onClick={() => goTo(idx)}
+              aria-label={`Go to reel ${idx + 1}`}
+              className={`w-2.5 h-2.5 rounded-full transition-colors ${
+                idx === currentIndex ? "bg-turmeric-300" : "bg-tamarind-900/30 hover:bg-tamarind-900/50"
+              }`}
+            />
+          ))}
+        </div>
+      )}
     </div>
   );
 }
