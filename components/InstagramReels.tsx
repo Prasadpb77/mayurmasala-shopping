@@ -73,11 +73,11 @@ export default function InstagramReels({ urls }: { urls: string[] }) {
           ◀
         </button>
 
-        {/* Reel container - 70% height */}
+        {/* Reel container - 85% height */}
         <div className="w-full max-w-md mx-10 overflow-hidden">
           <div
             className="transition-opacity duration-500"
-            style={{ height: "70vh", transform: "scale(0.7)", transformOrigin: "top center" }}
+            style={{ height: "85vh", transform: "scale(0.85)", transformOrigin: "top center" }}
           >
             <blockquote
               key={validUrls[currentIndex]}
