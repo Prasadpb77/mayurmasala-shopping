@@ -10,6 +10,7 @@ function SettingsAdmin() {
   const [about, setAbout] = useState({ title: "", body: "" });
   const [footer, setFooter] = useState({ tagline: "", hours: "" });
   const [reels, setReels] = useState({ urls: ["", "", ""] });
+  const [upi, setUpi] = useState({ vpa: "", payee_name: "" });
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState<string | null>(null);
 
@@ -22,6 +23,7 @@ function SettingsAdmin() {
         if (row.key === "about") setAbout(row.value);
         if (row.key === "footer") setFooter(row.value);
         if (row.key === "instagram_reels") setReels(row.value);
+        if (row.key === "upi") setUpi(row.value);
       });
       setLoading(false);
     }
@@ -108,6 +110,52 @@ function SettingsAdmin() {
           >
             {saving === "about" ? "Saving..." : "Save About Section"}
           </button>
+        </section>
+
+        {/* UPI PAYMENTS (read-only — see security note below) */}
+        <section className="bg-white/70 border border-turmeric-300/30 rounded-2xl p-5">
+          <h2 className="font-display text-xl text-tamarind-900 mb-1">UPI Payments</h2>
+          <p className="text-xs text-tamarind-800/60 mb-4">
+            Shown here for reference only. For security, your UPI ID can&apos;t be
+            changed from this dashboard — even if this login is ever compromised,
+            no one can redirect where payments go through the website. It can
+            only be set or updated by running SQL directly in your Supabase
+            project&apos;s SQL Editor.
+          </p>
+          <div className="grid sm:grid-cols-2 gap-3 mb-4">
+            <div>
+              <label className="block text-sm font-semibold text-tamarind-900 mb-1">
+                UPI ID (VPA)
+              </label>
+              <input
+                value={upi.vpa || "Not set"}
+                readOnly
+                disabled
+                className="w-full border border-tamarind-900/20 rounded-xl px-3 py-2 bg-tamarind-900/5 text-tamarind-800/70 cursor-not-allowed"
+              />
+            </div>
+            <div>
+              <label className="block text-sm font-semibold text-tamarind-900 mb-1">
+                Payee Name
+              </label>
+              <input
+                value={upi.payee_name || "Not set"}
+                readOnly
+                disabled
+                className="w-full border border-tamarind-900/20 rounded-xl px-3 py-2 bg-tamarind-900/5 text-tamarind-800/70 cursor-not-allowed"
+              />
+            </div>
+          </div>
+          <div className="bg-tamarind-900/5 rounded-xl p-3">
+            <p className="text-xs font-semibold text-tamarind-900 mb-1">
+              To set or change it, run this in the Supabase SQL Editor:
+            </p>
+            <pre className="text-[11px] bg-tamarind-900 text-cream rounded-lg p-3 overflow-x-auto">
+{`update site_settings
+set value = '{"vpa": "yourshop@okbank", "payee_name": "Your Shop Name"}'
+where key = 'upi';`}
+            </pre>
+          </div>
         </section>
 
         {/* INSTAGRAM REELS */}

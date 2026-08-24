@@ -4,7 +4,6 @@ import { useEffect, useState } from "react";
 import { useParams, useSearchParams } from "next/navigation";
 import Header from "@/components/Header";
 import Footer from "@/components/Footer";
-import { createClient } from "@/lib/supabaseClient";
 import { Order, STATUS_LABELS, STATUS_ORDER, formatOrderAddress } from "@/lib/types";
 
 export default function TrackOrderPage() {
@@ -20,18 +19,17 @@ export default function TrackOrderPage() {
   useEffect(() => {
     let active = true;
     async function fetchOrder() {
-      const supabase = createClient();
-      const { data, error } = await supabase
-        .from("orders")
-        .select("*")
-        .eq("id", id)
-        .single();
-
-      if (!active) return;
-      if (error || !data) {
-        setError("We couldn't find an order with this tracking link.");
-      } else {
-        setOrder(data as Order);
+      try {
+        const res = await fetch(`/api/orders/${id}`);
+        if (!active) return;
+        if (!res.ok) {
+          setError("We couldn't find an order with this tracking link.");
+        } else {
+          const data = await res.json();
+          setOrder(data.order as Order);
+        }
+      } catch (e) {
+        if (active) setError("Something went wrong loading this order. Please try again.");
       }
       setLoading(false);
     }

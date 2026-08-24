@@ -46,6 +46,7 @@ export interface SiteSettings {
   about: { title: string; body: string };
   footer: { tagline: string; hours: string };
   instagram_reels: { urls: string[] };
+  upi: { vpa: string; payee_name: string };
 }
 
 const DEFAULT_SETTINGS: SiteSettings = {
@@ -56,6 +57,7 @@ const DEFAULT_SETTINGS: SiteSettings = {
   },
   footer: { tagline: "Trusted since 1992.", hours: "" },
   instagram_reels: { urls: ["", "", ""] },
+  upi: { vpa: "", payee_name: "" },
 };
 
 export async function getSiteSettings(): Promise<SiteSettings> {
@@ -73,6 +75,7 @@ export async function getSiteSettings(): Promise<SiteSettings> {
     if (row.key === "about") settings.about = row.value;
     if (row.key === "footer") settings.footer = row.value;
     if (row.key === "instagram_reels") settings.instagram_reels = row.value;
+    if (row.key === "upi") settings.upi = row.value;
   }
   return settings;
 }

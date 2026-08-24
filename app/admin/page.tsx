@@ -6,8 +6,8 @@ import AdminNav from "@/components/AdminNav";
 import { createClient } from "@/lib/supabaseClient";
 import { Order, OrderStatus, STATUS_LABELS, ADMIN_STATUS_OPTIONS, formatOrderAddress } from "@/lib/types";
 import { buildStatusUpdateWhatsappLink } from "@/lib/whatsapp";
-import { generateBillPdfBlob } from "@/lib/billPdf";
 import { openThermalPrintWindow } from "@/lib/printBill";
+import { UpiSettings } from "@/lib/upi";
 
 const FILTERS: ("all" | OrderStatus)[] = ["all", ...ADMIN_STATUS_OPTIONS];
 
@@ -16,6 +16,7 @@ function OrdersDashboard() {
   const [loading, setLoading] = useState(true);
   const [filter, setFilter] = useState<"all" | OrderStatus>("all");
   const [uploadingFor, setUploadingFor] = useState<string | null>(null);
+  const [upi, setUpi] = useState<UpiSettings>({ vpa: "", payee_name: "" });
   const fileInputRef = useRef<HTMLInputElement | null>(null);
   const pendingUploadOrderId = useRef<string | null>(null);
 
@@ -29,8 +30,19 @@ function OrdersDashboard() {
     setLoading(false);
   }
 
+  async function loadUpiSettings() {
+    const supabase = createClient();
+    const { data } = await supabase
+      .from("site_settings")
+      .select("value")
+      .eq("key", "upi")
+      .maybeSingle();
+    if (data?.value) setUpi(data.value as UpiSettings);
+  }
+
   useEffect(() => {
     loadOrders();
+    loadUpiSettings();
     const supabase = createClient();
     const channel = supabase
       .channel("orders-changes")
@@ -83,26 +95,24 @@ function OrdersDashboard() {
   async function generateAndUploadBill(order: Order) {
     setUploadingFor(order.id);
     try {
-      const blob = generateBillPdfBlob(order);
       const supabase = createClient();
-      const path = `${order.id}/${Date.now()}-bill.pdf`;
+      const { data: sessionData } = await supabase.auth.getSession();
+      const token = sessionData.session?.access_token;
 
-      const { error: uploadError } = await supabase.storage
-        .from("bills")
-        .upload(path, blob, { contentType: "application/pdf", upsert: true });
+      const res = await fetch("/api/admin/bill", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({ orderId: order.id }),
+      });
 
-      if (uploadError) {
-        alert("Bill generation failed: " + uploadError.message);
+      if (!res.ok) {
+        alert("Bill generation failed. Please try again.");
         setUploadingFor(null);
         return;
       }
-
-      const { data: publicUrlData } = supabase.storage.from("bills").getPublicUrl(path);
-
-      await supabase
-        .from("orders")
-        .update({ bill_url: publicUrlData.publicUrl })
-        .eq("id", order.id);
     } catch (e) {
       console.error(e);
       alert("Something went wrong generating the bill.");
@@ -255,11 +265,20 @@ function OrdersDashboard() {
                   </button>
 
                   <button
-                    onClick={() => openThermalPrintWindow(order)}
+                    onClick={() => openThermalPrintWindow(order.id)}
                     className="text-xs font-semibold border border-tamarind-900/30 hover:border-vermillion-500 hover:text-vermillion-500 text-tamarind-900 px-3 py-2 rounded-full transition-colors"
                   >
-                    Print Bill
+                    Print Bill (Browser)
                   </button>
+
+                  <a
+                    href={`rawbt:${encodeURIComponent(
+                      `${process.env.NEXT_PUBLIC_SITE_URL || ""}/api/print-bill?id=${order.id}`
+                    )}`}
+                    className="text-xs font-semibold border border-tamarind-900/30 hover:border-vermillion-500 hover:text-vermillion-500 text-tamarind-900 px-3 py-2 rounded-full transition-colors"
+                  >
+                    Print via RawBT
+                  </a>
 
                   {order.status === "out_for_delivery" || order.bill_url ? (
                     <button
@@ -287,7 +306,7 @@ function OrdersDashboard() {
                   )}
 
                   <a
-                    href={buildStatusUpdateWhatsappLink(order)}
+                    href={buildStatusUpdateWhatsappLink(order, upi)}
                     target="_blank"
                     rel="noopener noreferrer"
                     className="text-xs font-semibold bg-green-600 hover:bg-green-500 text-white px-3 py-2 rounded-full transition-colors ml-auto"

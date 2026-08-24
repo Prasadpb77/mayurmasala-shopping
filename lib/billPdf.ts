@@ -5,6 +5,12 @@ import { Order, formatOrderAddress } from "./types";
 // ("2 inch") paper rolls. We generate a PDF sized exactly to that width,
 // with a dynamic height based on the number of items, so it prints cleanly
 // on thermal printers and also opens fine as a normal PDF elsewhere.
+//
+// Deliberately does NOT include a UPI QR code or any payment link — a bill
+// artifact (PDF/print) shouldn't carry a payout destination baked into it,
+// since anything embedded in a generated file is one more thing that could
+// theoretically be tampered with. Payment links live only in the WhatsApp
+// message, generated fresh from the locked, DB-read UPI settings.
 const PAGE_WIDTH_MM = 58;
 const MARGIN_MM = 3;
 const LINE_HEIGHT_MM = 4.2;
@@ -13,14 +19,17 @@ function wrapText(doc: jsPDF, text: string, maxWidth: number): string[] {
   return doc.splitTextToSize(text, maxWidth) as string[];
 }
 
-export function generateBillPdfBlob(order: Order): Blob {
+// Generates the receipt PDF as raw bytes (ArrayBuffer). Runs equally well
+// server-side (Node, inside an authenticated API route) or client-side.
+// Called from app/api/admin/bill/route.ts.
+export async function generateBillPdfBytes(order: Order): Promise<ArrayBuffer> {
   const shopName = process.env.NEXT_PUBLIC_SHOP_NAME || "Mayur Masala and Pooja Center";
   const shopAddress = process.env.NEXT_PUBLIC_SHOP_ADDRESS || "";
   const shopPhone = process.env.NEXT_PUBLIC_SHOP_PHONE || "";
   const contentWidth = PAGE_WIDTH_MM - MARGIN_MM * 2;
 
-  // Estimate height first using a throwaway doc, since jsPDF needs page
-  // height up front. Roughly: header block + one line per item + footer.
+  // Estimate height first, since jsPDF needs page height up front. Roughly:
+  // header block + one line per item + footer.
   const estimatedLines = 14 + order.items.length * 2;
   const estimatedHeight = estimatedLines * LINE_HEIGHT_MM + 20;
 
@@ -128,5 +137,5 @@ export function generateBillPdfBlob(order: Order): Blob {
   y += 3.2;
   doc.text("Serving Pimpri since 1992", PAGE_WIDTH_MM / 2, y, { align: "center" });
 
-  return doc.output("blob");
+  return doc.output("arraybuffer");
 }

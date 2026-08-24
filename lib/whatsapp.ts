@@ -1,5 +1,6 @@
 import { Order, STATUS_LABELS } from "./types";
 import { toE164Whatsapp } from "./validation";
+import { UpiSettings, isUpiConfigured, buildPayPageUrl } from "./upi";
 
 /**
  * Builds a wa.me click-to-chat link that opens WhatsApp with a pre-filled
@@ -7,10 +8,13 @@ import { toE164Whatsapp } from "./validation";
  * feature. Used by the dashboard to notify customers about status updates,
  * and can also be used to message the shop's own number for order alerts.
  */
-export function buildStatusUpdateWhatsappLink(order: Order): string {
+export function buildStatusUpdateWhatsappLink(order: Order, upi?: UpiSettings): string {
   const itemsText = order.items
     .map((i) => `- ${i.name} x${i.qty} (₹${(i.price * i.qty).toFixed(2)})`)
     .join("\n");
+
+  const showPayLink =
+    order.status === "out_for_delivery" && !order.payment_received && isUpiConfigured(upi);
 
   const message = [
     `Namaste ${order.customer_name},`,
@@ -24,6 +28,8 @@ export function buildStatusUpdateWhatsappLink(order: Order): string {
     `Total: ₹${order.total}`,
     order.payment_received ? `Payment: Received, thank you!` : `Payment: Cash on Delivery`,
     order.bill_url ? `Bill: ${order.bill_url}` : ``,
+    showPayLink ? `` : ``,
+    showPayLink ? `Prefer to pay online? Pay via UPI: ${buildPayPageUrl(order.id)}` : ``,
     ``,
     `Track your order: ${buildTrackingUrl(order.id)}`,
     ``,

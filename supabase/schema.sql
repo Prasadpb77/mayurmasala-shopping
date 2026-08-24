@@ -64,7 +64,8 @@ insert into site_settings (key, value) values
   ('banner', '{"enabled": true, "text": "Celebrating 30+ years in Pimpri — fresh masalas ground daily, all pooja samagri under one roof.", "link": ""}'),
   ('about', '{"title": "Our Story", "body": "Founded in 1992, Mayur Masala and Pooja Center has been Pimpri''s trusted home for pure, freshly ground masalas and complete pooja samagri for over three decades. What began as a small family counter has grown into the area''s most loved masala and pooja store, serving generations of families with the same care, purity and honesty we started with."}'),
   ('footer', '{"tagline": "Trusted since 1992 — Pimpri''s own masala and pooja store.", "hours": "Open all days, 9:00 AM - 9:00 PM"}'),
-  ('instagram_reels', '{"urls": ["", "", ""]}')
+  ('instagram_reels', '{"urls": ["", "", ""]}'),
+  ('upi', '{"vpa": "", "payee_name": ""}')
 on conflict (key) do nothing;
 
 -- 6. UPDATED_AT TRIGGER ------------------------------------------------
@@ -104,6 +105,29 @@ begin
   return result;
 end;
 $$ language plpgsql;
+
+-- 7b. ORDER INSERT GUARD ------------------------------------------------
+-- Recomputes "total" from the submitted items server-side (so a forged
+-- total can never be inserted, however the insert is made — app route,
+-- direct REST call, anything) and force-resets status/payment/bill fields
+-- to safe defaults. This holds even for insert paths that bypass the app.
+create or replace function guard_order_insert()
+returns trigger as $$
+begin
+  new.total := (
+    select coalesce(sum((item->>'price')::numeric * (item->>'qty')::numeric), 0)
+    from jsonb_array_elements(new.items) as item
+  );
+  new.status := 'received';
+  new.payment_received := false;
+  new.bill_url := null;
+  return new;
+end;
+$$ language plpgsql;
+
+drop trigger if exists trg_guard_order_insert on orders;
+create trigger trg_guard_order_insert before insert on orders
+  for each row execute procedure guard_order_insert();
 
 -- 5b. REVIEWS (manually curated from Google, shown on homepage) ------------
 create table if not exists reviews (
@@ -152,36 +176,71 @@ create policy "authenticated manage products" on products
   for all using (auth.role() = 'authenticated')
   with check (auth.role() = 'authenticated');
 
--- Orders: public can INSERT (place order) and SELECT by id (tracking page)
+-- Orders: public (anon) can only INSERT — never SELECT directly. Individual
+-- order lookups for the tracking/pay pages go through a server-side API
+-- route using the service role key (never exposed to the browser), so the
+-- anon key genuinely cannot list or scrape the orders table at all, even by
+-- calling the Supabase REST API directly outside the app.
 drop policy if exists "public insert orders" on orders;
 create policy "public insert orders" on orders
-  for insert with check (true);
+  for insert with check (
+    status = 'received'
+    and payment_received = false
+    and bill_url is null
+  );
+  -- total/status/payment_received/bill_url are also force-reset by the
+  -- trg_orders_before_insert trigger below, so this holds even if a request
+  -- bypasses the app and hits the REST API directly with a crafted payload.
 
 drop policy if exists "public read own order" on orders;
-create policy "public read own order" on orders
-  for select using (true); -- tracking page fetches by exact id via API route (service role) - see note below
+-- (intentionally no anon/public select policy on orders — see note above)
+
+drop policy if exists "authenticated select orders" on orders;
+create policy "authenticated select orders" on orders
+  for select using (auth.role() = 'authenticated');
 
 drop policy if exists "authenticated manage orders" on orders;
 create policy "authenticated manage orders" on orders
   for update using (auth.role() = 'authenticated')
-  with check (auth.role() = 'authenticated');
+  with check (
+    auth.role() = 'authenticated'
+    and (
+      bill_url is null
+      or bill_url ~ '^https://[a-z0-9-]+\.supabase\.co/storage/v1/object/public/bills/'
+    )
+  );
+  -- bill_url is constrained to your own Supabase storage bucket, so even a
+  -- compromised admin session can't point it at an external phishing/QR page.
 
 drop policy if exists "authenticated delete orders" on orders;
 create policy "authenticated delete orders" on orders
   for delete using (auth.role() = 'authenticated');
 
-drop policy if exists "authenticated view all orders" on orders;
--- (covered by "public read own order" select=true; dashboard uses authenticated session anyway)
-
--- Site settings: public can read, only authenticated can write
+-- Site settings: public can read everything (including "upi", since the
+-- checkout/pay/bill pages need the VPA client-side to render the QR code).
+-- The dashboard (authenticated role) can write every settings row EXCEPT
+-- "upi" — that row is intentionally excluded from every write policy below,
+-- so the payout destination can only ever be changed via direct SQL in the
+-- Supabase SQL editor (which runs as the project owner and bypasses RLS),
+-- never through the website's admin login.
 drop policy if exists "public read settings" on site_settings;
 create policy "public read settings" on site_settings
   for select using (true);
 
 drop policy if exists "authenticated manage settings" on site_settings;
-create policy "authenticated manage settings" on site_settings
-  for all using (auth.role() = 'authenticated')
-  with check (auth.role() = 'authenticated');
+
+drop policy if exists "authenticated insert settings" on site_settings;
+create policy "authenticated insert settings" on site_settings
+  for insert with check (auth.role() = 'authenticated' and key <> 'upi');
+
+drop policy if exists "authenticated update settings" on site_settings;
+create policy "authenticated update settings" on site_settings
+  for update using (auth.role() = 'authenticated' and key <> 'upi')
+  with check (auth.role() = 'authenticated' and key <> 'upi');
+
+drop policy if exists "authenticated delete settings" on site_settings;
+create policy "authenticated delete settings" on site_settings
+  for delete using (auth.role() = 'authenticated' and key <> 'upi');
 
 -- ============================================================
 -- STORAGE BUCKETS
@@ -224,8 +283,11 @@ create policy "authenticated upload bills" on storage.objects
 
 -- ============================================================
 -- NOTE ON ORDER PRIVACY:
--- The "public read own order" policy allows selecting orders by id,
--- which is fine because order IDs are random UUIDs (unguessable) and
--- the tracking page only ever queries by exact id. Do NOT build any
--- public "list all orders" view using the anon key.
+-- The anon key has NO select policy on "orders" at all — it can only
+-- insert new orders. The tracking page (/track/[id]) and pay page
+-- (/pay/[id]) fetch a single order by id through a server-side API route
+-- that uses the SUPABASE_SERVICE_ROLE_KEY (never exposed to the browser),
+-- not by querying the table directly from the client. This means the
+-- anon key genuinely cannot list or scrape customer orders, even by
+-- calling the Supabase REST API directly from outside the app.
 -- ============================================================

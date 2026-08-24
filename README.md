@@ -28,6 +28,17 @@ free WhatsApp "click to chat" links — no WhatsApp Business API needed.
    - Project URL
    - `anon` public key
 
+## 1.5 Add the service role key (required after the security hardening below)
+
+Go to **Project Settings → API → service_role key**, copy it, and add it as
+`SUPABASE_SERVICE_ROLE_KEY` in your `.env.local` / Vercel environment
+variables. This is a **secret** key — never prefix it with `NEXT_PUBLIC_`,
+never commit it, never expose it to the browser. It's used only inside
+`app/api/orders/[id]/route.ts`, the single narrow server route that lets the
+tracking/pay pages look up one order by its unguessable UUID, since the
+`orders` table intentionally has no public read access at all (see the
+security note below).
+
 ## 2. Configure environment variables
 
 Copy `.env.example` to `.env.local` and fill in:
@@ -170,21 +181,34 @@ Clicking any product photo (on the homepage) opens a full-size zoomed popup
 visual cue. Built with `components/LightboxContext.tsx`, wired in globally via
 the root layout so it's available anywhere product images are shown.
 
-**Bill generation & thermal printing**
-From `/admin` on any order:
-- **"Generate Bill"** — creates a receipt-style PDF sized for 58mm ("2 inch")
-  thermal printer rolls, uploads it automatically to the `bills` Supabase
-  Storage bucket, and saves the link on the order — no manual file needed.
-  That link then automatically shows up on the customer's **tracking page**
-  and gets included in the **WhatsApp status update** message, since both
-  already read from `order.bill_url`.
-- **"Print Bill"** — opens a print-ready receipt in a new window sized to
-  58mm width and triggers the browser's print dialog immediately; works with
-  any thermal printer set up as a normal system printer (most POS thermal
-  printers via their Windows/Android driver support this).
-- **"Upload Custom Bill (PDF)"** — the original manual upload is still there
-  in case you ever want to attach a different PDF (e.g. from separate billing
-  software) instead of the auto-generated one.
+**Bill generation & printing — no payment data baked into bills**
+Bills (PDF, browser print, and RawBT print) **never contain a UPI QR code or
+payment link** — a generated/printed file is something that could in
+principle be swapped or regenerated, so nothing about where money should go
+lives inside it. UPI payment prompts live only in the WhatsApp "Out for
+Delivery" message (see below), built fresh each time from the locked,
+SQL-only-editable setting — never from anything baked into a file.
+
+All generation happens **server-side** now, in API routes the browser can
+only trigger by order id, never by supplying its own data:
+- **"Generate Bill"** → `POST /api/admin/bill` (requires a valid admin
+  session) — builds the 58mm PDF server-side, uploads it to the `bills`
+  bucket, saves the link on the order. That link then shows up automatically
+  on the customer's tracking page and in the WhatsApp status update.
+- **"Print Bill (Browser)"** → `POST /api/admin/receipt` (requires a valid
+  admin session) — builds a print-ready 58mm HTML receipt server-side and
+  opens it in a new window with the browser's print dialog.
+- **"Print via RawBT"** → `GET /api/print-bill?id=<order-id>` — a public,
+  id-keyed endpoint (same trust model as order tracking: the id is an
+  unguessable UUID, no listing/scraping possible) that returns the receipt as
+  a JSON "rows" payload, in the same format used by the companion
+  [mayurmasala-bllling](https://github.com/Prasadpb77/mayurmasala-bllling)
+  billing app. Tapping this button opens a `rawbt:` link, which the
+  [RawBT Android app](https://www.rawbt.com/) intercepts, fetches, and sends
+  straight to a connected ESC/POS thermal printer.
+- **"Upload Custom Bill (PDF)"** — the manual upload option is still there
+  in case you ever want to attach a different PDF instead of the
+  auto-generated one.
 
 **Order management safeguards**
 - **Delete Order** — every order card in `/admin` has a "Delete Order" button
@@ -202,6 +226,68 @@ From `/admin` on any order:
   normal 4-step tracking timeline — instead, the tracking page shows a clear
   "this order was returned / could not be delivered, please contact the shop"
   banner. The same migration file above adds this status to the database.
+
+**Security hardening: orders table locked down**
+A review found the original setup allowed the anon key (visible in any
+website's JS — not a secret) to read every order via the Supabase REST API
+directly, bypassing the app's "look up one order by id" intention. Fixed:
+- **No public SELECT on `orders` at all.** The tracking page (`/track/[id]`)
+  and pay page (`/pay/[id]`) now fetch a single order through a server API
+  route (`app/api/orders/[id]/route.ts`) using the service role key — the
+  anon key can no longer list or scrape customer orders under any
+  circumstances, even by calling the Supabase API directly from outside
+  the app.
+- **Forged inserts blocked at the database level.** A trigger recomputes
+  `total` from the submitted items and force-resets `status`,
+  `payment_received`, and `bill_url` to safe defaults on every insert —
+  so a forged "already delivered, already paid, wrong total" order can't
+  be created however the insert request is made, not just through the
+  checkout form.
+- **`bill_url` constrained to your own storage bucket.** Even a compromised
+  admin session can't repoint a bill link at an external phishing/QR page —
+  the database rejects any URL that isn't under your Supabase Storage
+  `bills` bucket.
+
+If you already ran the original schema, run
+`supabase/migrations/008_lock_down_orders.sql` once, **and** add the
+`SUPABASE_SERVICE_ROLE_KEY` environment variable described in step 1.5 above
+— the tracking/pay pages will stop working without it.
+
+**UPI payments (WhatsApp pay link only) — set via SQL, read-only in dashboard**
+Your UPI ID is deliberately **not editable from the admin dashboard** — it's
+shown there as read-only for reference only. This means even if the site's
+admin login is ever compromised, no one can silently redirect where customer
+payments go through the website UI. You set/change it by running one SQL
+statement directly in your Supabase project's **SQL Editor** (which runs as
+the project owner and bypasses this restriction):
+
+```sql
+update site_settings
+set value = '{"vpa": "yourshop@okbank", "payee_name": "Your Shop Name"}'
+where key = 'upi';
+```
+
+Once set, the **WhatsApp update sent for "Out for Delivery"** includes a
+"Pay via UPI" link. It points to `/pay/[order-id]` on your own site —
+WhatsApp only makes `https://` links tappable, not `upi://` links directly,
+so this page auto-opens the customer's UPI app on their phone, and shows a
+QR + amount as a fallback if that doesn't fire (e.g. on desktop). This QR is
+generated fresh on that page from the real, locked settings — it is never
+baked into any bill/PDF/print file (see above).
+- The pay link **automatically disappears once you mark an order's payment
+  as Received** — no point showing a payment prompt for a paid order.
+- This is a plain UPI deep link, not a payment gateway — money goes straight
+  to your bank account, no fees, but there's no automatic confirmation. You
+  still tap **Payment Received** manually once you see it land, same as
+  before.
+- Use a **bank-handle VPA** (e.g. `shopname@okaxis`) rather than a
+  phone-number-linked one — the VPA is publicly readable (by design, so the
+  pay page can render the QR without login), and a phone-linked VPA would
+  expose that number.
+
+If you already ran the original schema, run these two migrations once, in
+order: `supabase/migrations/006_upi_payments.sql` (adds the setting) then
+`supabase/migrations/007_upi_readonly.sql` (locks dashboard writes to it).
 
 **1992 heritage story**
 Default "Our Story" copy in the schema (`site_settings.about`) is written
