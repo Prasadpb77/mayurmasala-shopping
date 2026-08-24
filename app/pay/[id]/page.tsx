@@ -6,7 +6,14 @@ import Header from "@/components/Header";
 import Footer from "@/components/Footer";
 import { createClient } from "@/lib/supabaseClient";
 import { Order } from "@/lib/types";
-import { UpiSettings, isUpiConfigured, buildUpiUri, buildUpiQrDataUrl } from "@/lib/upi";
+import {
+  UpiSettings,
+  isUpiConfigured,
+  buildUpiUri,
+  buildUpiQrDataUrl,
+  buildAppSpecificUpiLinks,
+  AppUpiLinks,
+} from "@/lib/upi";
 
 export default function PayOrderPage() {
   const params = useParams();
@@ -14,11 +21,10 @@ export default function PayOrderPage() {
 
   const [order, setOrder] = useState<Order | null>(null);
   const [upi, setUpi] = useState<UpiSettings | null>(null);
-  const [upiUri, setUpiUri] = useState("");
+  const [appLinks, setAppLinks] = useState<AppUpiLinks | null>(null);
   const [qrDataUrl, setQrDataUrl] = useState("");
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
-  const [redirected, setRedirected] = useState(false);
 
   useEffect(() => {
     async function load() {
@@ -43,16 +49,12 @@ export default function PayOrderPage() {
       setUpi(upiSettings);
 
       if (!orderObj.payment_received && isUpiConfigured(upiSettings)) {
-        const uri = buildUpiUri(upiSettings!, orderObj.total, orderObj.order_number);
-        setUpiUri(uri);
-        const qr = await buildUpiQrDataUrl(uri);
-        setQrDataUrl(qr);
+        const links = buildAppSpecificUpiLinks(upiSettings!, orderObj.total, orderObj.order_number);
+        setAppLinks(links);
 
-        // Auto-redirect on mobile, where a UPI app can actually open this.
-        setTimeout(() => {
-          setRedirected(true);
-          window.location.href = uri;
-        }, 600);
+        const genericUri = buildUpiUri(upiSettings!, orderObj.total, orderObj.order_number);
+        const qr = await buildUpiQrDataUrl(genericUri);
+        setQrDataUrl(qr);
       }
 
       setLoading(false);
@@ -86,33 +88,57 @@ export default function PayOrderPage() {
           </div>
         )}
 
-        {!loading && order && !order.payment_received && isUpiConfigured(upi) && (
+        {!loading && order && !order.payment_received && isUpiConfigured(upi) && appLinks && (
           <div>
             <h1 className="font-display text-2xl text-tamarind-900 mb-1">Pay via UPI</h1>
             <p className="text-tamarind-800/60 text-sm mb-6">
               Order {order.order_number} · ₹{order.total.toFixed(0)}
             </p>
 
+            <p className="text-xs font-semibold text-tamarind-900/70 mb-3">
+              Choose your UPI app
+            </p>
+            <div className="grid grid-cols-2 gap-3 mb-6">
+              <a
+                href={appLinks.gpay}
+                className="bg-white border border-turmeric-300/40 hover:border-vermillion-500 rounded-xl py-3 text-sm font-semibold text-tamarind-900 transition-colors"
+              >
+                Google Pay
+              </a>
+              <a
+                href={appLinks.phonepe}
+                className="bg-white border border-turmeric-300/40 hover:border-vermillion-500 rounded-xl py-3 text-sm font-semibold text-tamarind-900 transition-colors"
+              >
+                PhonePe
+              </a>
+              <a
+                href={appLinks.paytm}
+                className="bg-white border border-turmeric-300/40 hover:border-vermillion-500 rounded-xl py-3 text-sm font-semibold text-tamarind-900 transition-colors"
+              >
+                Paytm
+              </a>
+              <a
+                href={appLinks.generic}
+                className="bg-white border border-turmeric-300/40 hover:border-vermillion-500 rounded-xl py-3 text-sm font-semibold text-tamarind-900 transition-colors"
+              >
+                Other UPI App
+              </a>
+            </div>
+
             {qrDataUrl && (
-              <div className="bg-white border border-turmeric-300/30 rounded-2xl p-6 inline-block mb-6">
+              <div className="bg-white border border-turmeric-300/30 rounded-2xl p-6">
+                <p className="text-xs text-tamarind-800/60 mb-3">Or scan with any UPI app</p>
                 {/* eslint-disable-next-line @next/next/no-img-element */}
-                <img src={qrDataUrl} alt="UPI QR code" className="w-56 h-56 mx-auto" />
+                <img src={qrDataUrl} alt="UPI QR code" className="w-48 h-48 mx-auto" />
                 <p className="font-display text-xl text-vermillion-500 mt-3">
                   ₹{order.total.toFixed(0)}
                 </p>
               </div>
             )}
 
-            <a
-              href={upiUri}
-              className="block w-full bg-vermillion-500 hover:bg-vermillion-400 text-cream font-semibold py-3 rounded-full transition-colors mb-3"
-            >
-              Open UPI App
-            </a>
-            <p className="text-xs text-tamarind-800/50">
-              {redirected
-                ? "If your UPI app didn't open automatically, tap the button above or scan the QR code."
-                : "Opening your UPI app..."}
+            <p className="text-xs text-tamarind-800/50 mt-4">
+              If a button doesn&apos;t open your app (common inside WhatsApp&apos;s built-in
+              browser), tap the ⋯ menu and choose &quot;Open in Browser&quot;, or just scan the QR code.
             </p>
           </div>
         )}
