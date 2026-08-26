@@ -241,6 +241,12 @@ function OrdersDashboard() {
                       </li>
                     ))}
                   </ul>
+                  {order.delivery_charge > 0 && (
+                    <p className="text-xs text-tamarind-800/60 mt-1">
+                      + ₹{order.delivery_charge.toFixed(0)} delivery
+                      {order.delivery_zone ? ` (${order.delivery_zone.replace(/_/g, " ")})` : ""}
+                    </p>
+                  )}
                 </div>
 
                 <div className="flex flex-wrap items-center gap-2">

@@ -30,7 +30,7 @@ export async function generateBillPdfBytes(order: Order): Promise<ArrayBuffer> {
 
   // Estimate height first, since jsPDF needs page height up front. Roughly:
   // header block + one line per item + footer.
-  const estimatedLines = 14 + order.items.length * 2;
+  const estimatedLines = 17 + order.items.length * 2;
   const estimatedHeight = estimatedLines * LINE_HEIGHT_MM + 20;
 
   const doc = new jsPDF({
@@ -116,6 +116,20 @@ export async function generateBillPdfBytes(order: Order): Promise<ArrayBuffer> {
   y += 1;
   doc.line(MARGIN_MM, y, PAGE_WIDTH_MM - MARGIN_MM, y);
   y += 3.8;
+
+  doc.setFont("courier", "normal");
+  doc.setFontSize(8);
+  const subtotal = order.subtotal ?? order.total - order.delivery_charge;
+  doc.text("Subtotal", MARGIN_MM, y);
+  doc.text(`Rs.${subtotal.toFixed(0)}`, PAGE_WIDTH_MM - MARGIN_MM, y, { align: "right" });
+  y += LINE_HEIGHT_MM;
+
+  if (order.delivery_charge > 0) {
+    doc.text("Delivery", MARGIN_MM, y);
+    doc.text(`Rs.${order.delivery_charge.toFixed(0)}`, PAGE_WIDTH_MM - MARGIN_MM, y, { align: "right" });
+    y += LINE_HEIGHT_MM;
+  }
+  y += 0.8;
 
   doc.setFont("courier", "bold");
   doc.setFontSize(9.5);

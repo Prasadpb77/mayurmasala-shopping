@@ -76,6 +76,11 @@ export function validateCheckout(input: {
   city: string;
   state?: string;
   honeypot?: string;
+  // Whether this pincode was confirmed to be a real, deliverable Indian PIN
+  // code (via lib/pincode.ts lookup). Orders are only accepted with a
+  // pincode that India Post actually recognizes — anywhere in India, not
+  // just Maharashtra.
+  pincodeVerified?: boolean;
 }): CheckoutValidationResult {
   const errors: CheckoutValidationResult["errors"] = {};
 
@@ -95,6 +100,8 @@ export function validateCheckout(input: {
   }
   if (!isValidPincode(input.pincode)) {
     errors.pincode = "Enter a valid 6-digit PIN code.";
+  } else if (input.pincodeVerified === false) {
+    errors.pincode = "We couldn't verify this PIN code with India Post. Please double-check and re-enter it.";
   }
   if (!isValidCity(input.city)) {
     errors.city = "Enter a valid city name.";

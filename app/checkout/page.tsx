@@ -1,12 +1,21 @@
 "use client";
 
-import { useState, useRef } from "react";
+import { useState, useRef, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import Header from "@/components/Header";
 import CartDrawer from "@/components/CartDrawer";
 import { useCart } from "@/components/CartContext";
 import { validateCheckout } from "@/lib/validation";
 import { lookupPincode } from "@/lib/pincode";
+import { createClient } from "@/lib/supabaseClient";
+import {
+  resolveDeliveryZone,
+  getZoneCharge,
+  getZoneLabel,
+  DEFAULT_DELIVERY_ZONES,
+  DeliveryZoneSettings,
+  DeliveryZoneKey,
+} from "@/lib/deliveryZones";
 
 export default function CheckoutPage() {
   const { items, total, clearCart } = useCart();
@@ -26,10 +35,33 @@ export default function CheckoutPage() {
   const [serverError, setServerError] = useState("");
   const lookupTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
+  // Delivery zone charge preview — resolved as soon as we have a verified
+  // pincode. The actual charge used on the order is always recomputed
+  // server-side; this is just so the customer sees it before placing the order.
+  const [zoneSettings, setZoneSettings] = useState<DeliveryZoneSettings>(DEFAULT_DELIVERY_ZONES);
+  const [zoneKey, setZoneKey] = useState<DeliveryZoneKey | null>(null);
+
+  useEffect(() => {
+    async function loadZoneSettings() {
+      const supabase = createClient();
+      const { data } = await supabase
+        .from("site_settings")
+        .select("value")
+        .eq("key", "delivery_zones")
+        .maybeSingle();
+      if (data?.value) setZoneSettings(data.value as DeliveryZoneSettings);
+    }
+    loadZoneSettings();
+  }, []);
+
+  const deliveryCharge = zoneKey ? getZoneCharge(zoneSettings, zoneKey) : 0;
+  const grandTotal = total + deliveryCharge;
+
   function handlePincodeChange(value: string) {
     const digitsOnly = value.replace(/\D/g, "").slice(0, 6);
     setPincode(digitsOnly);
     setPincodeStatus("idle");
+    setZoneKey(null);
 
     if (lookupTimer.current) clearTimeout(lookupTimer.current);
 
@@ -41,6 +73,7 @@ export default function CheckoutPage() {
           setCity(result.city);
           setState(result.state);
           setPincodeStatus("found");
+          setZoneKey(resolveDeliveryZone(result.city, result.state));
         } else {
           setPincodeStatus("not_found");
         }
@@ -64,6 +97,19 @@ export default function CheckoutPage() {
     });
     if (!result.valid) {
       setErrors(result.errors);
+      return;
+    }
+
+    // We only accept orders with a PIN code we could actually verify with
+    // India Post — anywhere in India. Block submission client-side too, so
+    // the customer sees the problem immediately instead of after a round trip.
+    if (pincodeStatus !== "found") {
+      setErrors({
+        pincode:
+          pincodeStatus === "not_found"
+            ? "We couldn't verify this PIN code. Please double-check and re-enter it."
+            : "Please enter a valid 6-digit PIN code and wait for it to be verified.",
+      });
       return;
     }
     setErrors({});
@@ -214,8 +260,14 @@ export default function CheckoutPage() {
                   <p className="text-xs text-tamarind-800/50 mt-1">Looking up city...</p>
                 )}
                 {pincodeStatus === "not_found" && (
-                  <p className="text-xs text-tamarind-800/50 mt-1">
-                    Couldn&apos;t auto-detect — please fill city below.
+                  <p className="text-xs text-vermillion-500 mt-1">
+                    We couldn&apos;t verify this PIN code with India Post. Orders can only be
+                    placed with a valid PIN code — please double-check and re-enter it.
+                  </p>
+                )}
+                {pincodeStatus === "found" && zoneKey && (
+                  <p className="text-xs text-green-700 mt-1">
+                    ✓ Verified — delivery zone: {getZoneLabel(zoneSettings, zoneKey)}
                   </p>
                 )}
               </div>
@@ -253,7 +305,7 @@ export default function CheckoutPage() {
               disabled={submitting || items.length === 0}
               className="w-full bg-vermillion-500 hover:bg-vermillion-400 disabled:opacity-50 text-cream font-semibold py-3 rounded-full transition-colors"
             >
-              {submitting ? "Placing your order..." : `Place Order · ₹${total.toFixed(0)} (COD)`}
+              {submitting ? "Placing your order..." : `Place Order · ₹${grandTotal.toFixed(0)} (COD)`}
             </button>
           </form>
 
@@ -266,10 +318,28 @@ export default function CheckoutPage() {
                   <span>₹{(item.price * item.qty).toFixed(0)}</span>
                 </div>
               ))}
+              <div className="border-t border-turmeric-300/30 pt-3 flex justify-between text-sm">
+                <span>Subtotal</span>
+                <span>₹{total.toFixed(0)}</span>
+              </div>
+              <div className="flex justify-between text-sm">
+                <span>
+                  Delivery
+                  {zoneKey && (
+                    <span className="text-tamarind-800/50"> ({getZoneLabel(zoneSettings, zoneKey)})</span>
+                  )}
+                </span>
+                <span>{zoneKey ? `₹${deliveryCharge.toFixed(0)}` : "—"}</span>
+              </div>
               <div className="border-t border-turmeric-300/30 pt-3 flex justify-between font-semibold">
                 <span>Total</span>
-                <span className="text-vermillion-500">₹{total.toFixed(0)}</span>
+                <span className="text-vermillion-500">₹{grandTotal.toFixed(0)}</span>
               </div>
+              {!zoneKey && (
+                <p className="text-xs text-tamarind-800/50">
+                  Enter a valid PIN code to see delivery charges.
+                </p>
+              )}
             </div>
           </div>
         </div>

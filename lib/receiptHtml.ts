@@ -71,6 +71,16 @@ export function buildReceiptHtml(order: Order): string {
     </thead>
     <tbody>
       ${itemsHtml}
+      <tr>
+        <td>Subtotal</td>
+        <td></td>
+        <td class="amt">Rs.${(order.subtotal ?? order.total - order.delivery_charge).toFixed(0)}</td>
+      </tr>
+      ${order.delivery_charge > 0 ? `<tr>
+        <td>Delivery</td>
+        <td></td>
+        <td class="amt">Rs.${order.delivery_charge.toFixed(0)}</td>
+      </tr>` : ""}
       <tr class="total-row">
         <td>TOTAL</td>
         <td></td>

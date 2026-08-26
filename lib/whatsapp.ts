@@ -26,6 +26,7 @@ export function buildStatusUpdateWhatsappLink(order: Order, upi?: UpiSettings): 
     itemsText,
     ``,
     `Total: ₹${order.total}`,
+    order.delivery_charge > 0 ? `(includes ₹${order.delivery_charge} delivery charge)` : ``,
     order.payment_received ? `Payment: Received, thank you!` : `Payment: Cash on Delivery`,
     order.bill_url ? `Bill: ${order.bill_url}` : ``,
     showPayLink ? `` : ``,

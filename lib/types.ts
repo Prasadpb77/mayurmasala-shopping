@@ -45,6 +45,9 @@ export interface Order {
   state: string;
   address: string | null; // legacy combined address, kept for old orders
   items: OrderItem[];
+  subtotal: number | null; // items total, before delivery charge (null on pre-migration orders)
+  delivery_charge: number; // resolved server-side from the customer's zone at order time
+  delivery_zone: string | null; // zone key, e.g. "pune_local", "mumbai" — for reference/reporting
   total: number;
   status: OrderStatus;
   payment_received: boolean;

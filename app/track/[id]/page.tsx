@@ -116,7 +116,17 @@ export default function TrackOrderPage() {
                     <span>₹{(item.price * item.qty).toFixed(0)}</span>
                   </div>
                 ))}
-                <div className="border-t border-turmeric-300/30 mt-3 pt-3 flex justify-between font-semibold">
+                <div className="border-t border-turmeric-300/30 mt-3 pt-3 flex justify-between text-sm">
+                  <span>Subtotal</span>
+                  <span>₹{(order.subtotal ?? order.total - order.delivery_charge).toFixed(0)}</span>
+                </div>
+                {order.delivery_charge > 0 && (
+                  <div className="flex justify-between text-sm">
+                    <span>Delivery</span>
+                    <span>₹{order.delivery_charge.toFixed(0)}</span>
+                  </div>
+                )}
+                <div className="border-t border-turmeric-300/30 mt-1 pt-3 flex justify-between font-semibold">
                   <span>Total</span>
                   <span className="text-vermillion-500">₹{order.total.toFixed(0)}</span>
                 </div>

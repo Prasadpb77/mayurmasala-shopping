@@ -93,6 +93,11 @@ export async function GET(req: NextRequest) {
     });
 
     rows.push(text(SOLID));
+    const subtotal = o.subtotal ?? o.total - o.delivery_charge;
+    rows.push(text(`Subtotal              Rs.${subtotal.toFixed(2)}`, { align: 2 }));
+    if (o.delivery_charge > 0) {
+      rows.push(text(`Delivery              Rs.${o.delivery_charge.toFixed(2)}`, { align: 2 }));
+    }
     rows.push(text(`TOTAL Rs.${o.total.toFixed(2)}`, { bold: 1, align: 1, format: 3 }));
     rows.push(text(SOLID));
 
